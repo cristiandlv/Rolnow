@@ -17,7 +17,7 @@ export default function TablePage() {
       <div className="flex flex-col lg:flex-row gap-4 h-full">
         {/* 🧰 Caja de Herramientas */}
         <aside className="lg:w-1/5 bg-gray-800 rounded-xl p-4 flex flex-col items-center shadow-lg">
-          <h2 className="text-xl font-bold text-emerald-400 mb-4">🧰 Herramientas</h2>
+          <h2 className="text-xl font-bold text-emerald-400 mb-4"> Dados </h2>
           <DicePanel onRoll={setRolledDice} />
           {/* Futuras herramientas aquí */}
         </aside>
