@@ -1,4 +1,3 @@
-// src/app/table/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -16,6 +15,7 @@ export interface CellToken {
 
 export default function TablePage() {
   const [rolledDice, setRolledDice] = useState<{ type: DiceType; value: number } | null>(null);
+  const [isShaking, setIsShaking] = useState(false); 
   const [tokens, setTokens] = useState<CellToken[]>([]);
 
   return (
@@ -24,14 +24,20 @@ export default function TablePage() {
         {/* 🧰 Herramientas */}
         <aside className="lg:w-1/5 bg-gray-800 rounded-xl p-4 flex flex-col items-center shadow-lg overflow-auto">
           <h2 className="text-xl font-bold text-emerald-400 mb-4">🧰 Herramientas</h2>
-          <DicePanel onRoll={setRolledDice} />
+          <DicePanel
+  onRoll={setRolledDice}
+  onStartShake={() => setIsShaking(true)}
+  onStopShake={() => setIsShaking(false)}
+/>
+
+<GameBoard rolledDice={rolledDice} isShaking={isShaking} tokens={[]} />
           <TokenPalette />
         </aside>
 
         {/* 🧩 Tablero */}
         <section className="lg:w-3/5 bg-gray-900 rounded-xl p-6 flex flex-col items-center justify-start shadow-2xl min-h-[400px] overflow-auto">
           <h2 className="text-2xl font-bold text-emerald-400 mb-6">🧩 Tablero de juego</h2>
-          <GameBoard rolledDice={rolledDice} tokens={tokens.map((t) => t.tokenId)} />
+          <GameBoard rolledDice={rolledDice} isShaking={isShaking} tokens={tokens.map(t => t.tokenId)} />
           <GridBoard tokens={tokens} setTokens={setTokens} />
         </section>
 

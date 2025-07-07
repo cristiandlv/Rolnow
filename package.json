@@ -16,6 +16,7 @@
     "@iconify/react": "^6.0.0",
     "framer-motion": "^12.20.1",
     "next": "15.3.4",
+    "o": "^2.3.2",
     "react": "^19.0.0",
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",

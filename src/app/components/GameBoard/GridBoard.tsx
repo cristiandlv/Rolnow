@@ -20,64 +20,40 @@ export default function GridBoard({ tokens, setTokens }: GridBoardProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isCopying, setIsCopying] = useState(false);
 
+  // Zoom handlers
   const zoomIn = () => setCellSize((prev) => Math.min(prev + 10, 100));
   const zoomOut = () => setCellSize((prev) => Math.max(prev - 10, 30));
   const resetZoom = () => setCellSize(60);
 
-  const handleDrop = (index: number, e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setHoveredIndex(null);
-
-    const ctrlPressed = e.ctrlKey || e.metaKey;
-    const fromPaletteId = e.dataTransfer.getData("token-id");
-    const fromBoardRaw = e.dataTransfer.getData("from-board");
-
-    if (fromPaletteId && tokenData[fromPaletteId]) {
-      // Token nuevo desde la paleta
-      if (!tokens.find((t) => t.id === index)) {
-        setTokens((prev) => [...prev, { id: index, tokenId: fromPaletteId }]);
-      }
-    } else if (fromBoardRaw) {
-      try {
-        const movedToken: CellToken = JSON.parse(fromBoardRaw);
-        if (!tokens.find((t) => t.id === index)) {
-          if (ctrlPressed) {
-            // Duplica
-            setTokens((prev) => [...prev, { id: index, tokenId: movedToken.tokenId }]);
-          } else {
-            // Mueve
-            setTokens((prev) =>
-              prev.filter((t) => t.id !== movedToken.id).concat({ ...movedToken, id: index })
-            );
-          }
-        }
-      } catch {
-        // JSON malformado o sin datos, no hace nada
-      }
-    }
-  };
-
+  // Cuando arrastrás un token del tablero:
   const handleDragStart = (token: CellToken, e: React.DragEvent<HTMLDivElement>) => {
+    // Serializamos token para poder mover/copiar
     e.dataTransfer.setData("from-board", JSON.stringify(token));
 
+    // Crear una imagen temporal para drag con el icono real:
     const iconInfo = tokenData[token.tokenId];
     if (!iconInfo) return;
 
-    const dragImg = document.createElement("div");
-    dragImg.style.width = `${cellSize}px`;
-    dragImg.style.height = `${cellSize}px`;
-    dragImg.style.display = "flex";
-    dragImg.style.alignItems = "center";
-    dragImg.style.justifyContent = "center";
-    dragImg.style.background = "transparent";
-    dragImg.style.fontSize = `${cellSize * 0.6}px`;
-    dragImg.style.color = iconInfo.color;
-    dragImg.innerHTML = `<iconify-icon icon="${iconInfo.icon}" style="font-size:${cellSize * 0.6}px;color:${iconInfo.color};"></iconify-icon>`;
-    document.body.appendChild(dragImg);
-    e.dataTransfer.setDragImage(dragImg, cellSize / 2, cellSize / 2);
-    setTimeout(() => document.body.removeChild(dragImg), 0);
+    // Crear un canvas para dibujar el icono y usarlo como drag image
+    const canvas = document.createElement("canvas");
+    canvas.width = cellSize;
+    canvas.height = cellSize;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Dibujo simple: fondo transparente + texto emoji de fallback
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = iconInfo.color;
+    ctx.font = `${cellSize * 0.8}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🎲", canvas.width / 2, canvas.height / 2);
+
+    // Seteamos la imagen para el drag
+    e.dataTransfer.setDragImage(canvas, cellSize / 2, cellSize / 2);
   };
 
+  // Cuando arrastrás sobre una celda
   const handleDragOver = (index: number, e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setHoveredIndex(index);
@@ -89,6 +65,41 @@ export default function GridBoard({ tokens, setTokens }: GridBoardProps) {
     setIsCopying(false);
   };
 
+  // Drop en la celda
+  const handleDrop = (index: number, e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setHoveredIndex(null);
+
+    const ctrlPressed = e.ctrlKey || e.metaKey;
+    const fromPaletteId = e.dataTransfer.getData("token-id");
+    const fromBoardRaw = e.dataTransfer.getData("from-board");
+
+    if (fromPaletteId && tokenData[fromPaletteId]) {
+      // Token nuevo desde paleta
+      if (!tokens.find((t) => t.id === index)) {
+        setTokens((prev) => [...prev, { id: index, tokenId: fromPaletteId }]);
+      }
+    } else if (fromBoardRaw) {
+      try {
+        const movedToken: CellToken = JSON.parse(fromBoardRaw);
+        if (!tokens.find((t) => t.id === index)) {
+          if (ctrlPressed) {
+            // Duplica token
+            setTokens((prev) => [...prev, { id: index, tokenId: movedToken.tokenId }]);
+          } else {
+            // Mueve token
+            setTokens((prev) =>
+              prev.filter((t) => t.id !== movedToken.id).concat({ ...movedToken, id: index })
+            );
+          }
+        }
+      } catch {
+        // Error JSON
+      }
+    }
+  };
+
+  // Click derecho elimina token
   const handleRightClick = (e: React.MouseEvent, index: number) => {
     e.preventDefault();
     setTokens((prev) => prev.filter((t) => t.id !== index));
@@ -154,8 +165,22 @@ export default function GridBoard({ tokens, setTokens }: GridBoardProps) {
                     className="absolute inset-0 flex items-center justify-center cursor-move select-none"
                     style={{ color: tokenInfo.color }}
                   >
-                    <Icon icon={tokenInfo.icon} width={cellSize * 0.6} height={cellSize * 0.6} />
-                  </div>
+                                  <Icon
+                icon={tokenInfo.icon}
+                color={tokenInfo.color}
+                width={
+                  ["dungeon", "environment"].includes(tokenInfo.category)
+                    ? cellSize * 0.85
+                    : cellSize * 0.6
+                }
+                height={
+                  ["dungeon", "environment"].includes(tokenInfo.category)
+                    ? cellSize * 0.85
+                    : cellSize * 0.6
+                }
+              />
+
+                                </div>
                 )}
               </div>
             );
