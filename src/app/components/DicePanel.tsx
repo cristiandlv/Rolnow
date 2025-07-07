@@ -71,7 +71,7 @@ export default function DicePanel({ onRoll, onStartShake, onStopShake }: Props) 
         🎲 Tirar Dados
       </h2>
 
-      <div className="grid grid-cols-4 gap-6 justify-center">
+      <div className="grid grid-cols-4 gap-5 justify-center">
         {diceList.map((dice) => {
           const color = diceColors[dice];
           const isShaking = shakingDice === dice;

@@ -22,7 +22,7 @@ export default function TablePage() {
     <main className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-4">
       <div className="flex flex-col lg:flex-row gap-4 h-full">
         {/* 🧰 Herramientas */}
-        <aside className="lg:w-1/5 bg-gray-800 rounded-xl p-4 flex flex-col items-center shadow-lg overflow-auto">
+        <aside className="lg:w-1/5 bg-gray-800 rounded-xl p-2 flex flex-col items-center shadow-lg overflow-auto">
           <h2 className="text-xl font-bold text-emerald-400 mb-4">🧰 Herramientas</h2>
           <DicePanel
   onRoll={setRolledDice}
@@ -38,7 +38,8 @@ export default function TablePage() {
         <section className="lg:w-3/5 bg-gray-900 rounded-xl p-6 flex flex-col items-center justify-start shadow-2xl min-h-[400px] overflow-auto">
           <h2 className="text-2xl font-bold text-emerald-400 mb-6">🧩 Tablero de juego</h2>
           <GameBoard rolledDice={rolledDice} isShaking={isShaking} tokens={tokens.map(t => t.tokenId)} />
-          <GridBoard tokens={tokens} setTokens={setTokens} />
+          <GridBoard tokens={tokens} setTokens={setTokens} rolledDice={rolledDice} />
+
         </section>
 
         {/* 💬 Chat */}
