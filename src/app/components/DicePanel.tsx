@@ -32,7 +32,7 @@ const diceColors: Record<DiceType, { text: string; border: string; ring: string 
 };
 
 const shakeVariants: Variants = {
-  idle: { rotate: 0, x: 0, y: 0, transition: { duration: 0.3, ease: "easeOut" } },
+  idle: { rotate: 0, x: 0, y: 0, transition: { duration: 0.3 } },
   shaking: {
     rotate: [0, 10, -10, 10, -10, 0],
     x: [0, -3, 3, -3, 3, 0],
@@ -45,28 +45,24 @@ export default function DicePanel({ onRoll, onStartShake, onStopShake }: Props) 
   const diceList: DiceType[] = ["d4", "d6", "d8", "d10", "d12", "d20", "d100"];
   const [shakingDice, setShakingDice] = useState<DiceType | null>(null);
 
-  const rollDice = (type: DiceType) => {
+  const handleDiceClick = (type: DiceType) => {
     const sides = parseInt(type.replace("d", ""), 10);
     if (isNaN(sides)) return;
+
     const result = Math.floor(Math.random() * sides) + 1;
-    onRoll({ type, value: result });
-  };
 
-  const handleStartShake = (dice: DiceType) => {
-    setShakingDice(dice);
+    setShakingDice(type);
     onStartShake();
-  };
 
-  const handleStopShake = () => {
-    setShakingDice(null);
-    onStopShake();
+    setTimeout(() => {
+      setShakingDice(null);
+      onStopShake();
+      onRoll({ type, value: result });
+    }, 2000); // SHAKE_DURATION
   };
 
   return (
-    <section
-      aria-label="Dice Roller Panel"
-      className="max-w-md mx-auto mt-10 p-6 bg-gray-900 rounded-xl shadow-lg border border-gray-700"
-    >
+    <section className="max-w-md mx-auto mt-10 p-6 bg-gray-900 rounded-xl shadow-lg border border-gray-700">
       <h2 className="text-2xl font-semibold text-emerald-400 mb-6 text-center select-none">
         🎲 Tirar Dados
       </h2>
@@ -79,44 +75,25 @@ export default function DicePanel({ onRoll, onStartShake, onStopShake }: Props) 
           return (
             <motion.button
               key={dice}
-              onClick={() => rollDice(dice)}
-              title={`Tirar dado ${dice.toUpperCase()}`}
-              aria-label={`Tirar dado ${dice.toUpperCase()}`}
-              onMouseDown={() => handleStartShake(dice)}
-              onMouseUp={handleStopShake}
-              onMouseLeave={handleStopShake}
-              onTouchStart={() => handleStartShake(dice)}
-              onTouchEnd={handleStopShake}
-              onTouchCancel={handleStopShake}
+              initial="idle" // 👈 NECESARIO
               animate={isShaking ? "shaking" : "idle"}
               variants={shakeVariants}
+              onClick={() => handleDiceClick(dice)}
               className={`
                 flex flex-col items-center justify-center
-                rounded-lg border-2
-                bg-gray-800
+                rounded-lg border-2 bg-gray-800
                 ${color.text} ${color.border}
                 font-semibold text-lg uppercase
-                shadow-md
-                cursor-pointer
-                select-none
-                transition
-                duration-300
-                ease-out
-                hover:bg-gray-700 hover:scale-110 hover:shadow-lg
+                shadow-md cursor-pointer select-none
+                transition duration-300 ease-out
+                hover:bg-gray-700 hover:scale-110
                 active:scale-95 active:bg-gray-900
                 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-offset-gray-900
                 ${color.ring}
               `}
               style={{ width: "72px", height: "72px" }}
             >
-              <Icon
-                icon={diceIcons[dice]}
-                width={32}
-                height={32}
-                className={`mb-1 ${color.text}`}
-                aria-hidden="true"
-                focusable="false"
-              />
+              <Icon icon={diceIcons[dice]} width={32} height={32} className={`mb-1 ${color.text}`} />
               {dice.toUpperCase()}
             </motion.button>
           );
