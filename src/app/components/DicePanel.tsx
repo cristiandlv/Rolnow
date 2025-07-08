@@ -62,12 +62,12 @@ export default function DicePanel({ onRoll, onStartShake, onStopShake }: Props) 
   };
 
   return (
-    <section className="max-w-md mx-auto mt-10 p-6 bg-gray-900 rounded-xl shadow-lg border border-gray-700">
+    <section className="max-w-md mx-auto mt-10 p-5 bg-gray-900 rounded-xl shadow-lg border border-gray-700">
       <h2 className="text-2xl font-semibold text-emerald-400 mb-6 text-center select-none">
         🎲 Tirar Dados
       </h2>
 
-      <div className="grid grid-cols-4 gap-5 justify-center">
+      <div className="grid grid-cols-3 gap-2 justify-center">
         {diceList.map((dice) => {
           const color = diceColors[dice];
           const isShaking = shakingDice === dice;
