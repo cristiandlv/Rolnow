@@ -1,20 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
-export interface DrawingCanvasProps {
-  id?: string;
+interface DrawingCanvasProps {
+  drawing?: string | null;          // base64 remoto para pintar
   strokeColor: string;
   strokeWidth: number;
   clearTrigger: boolean;
   onClearDone: () => void;
   isDrawingMode: boolean;
   isEraserMode: boolean;
-  parentRef: React.RefObject<HTMLDivElement>; // contenedor scrollable del grid
+  parentRef: React.RefObject<HTMLDivElement>;
+  onChange?: (dataUrl: string) => void; // se llama al finalizar el trazo
+  disableDrawing?: boolean;             // bloquea mientras se arrastra token u otros drags
+  onRequestExitDrawing?: () => void;    // pedir apagar el lápiz (auto-off al terminar trazo)
 }
 
 export default function DrawingCanvas({
-  id,
+  drawing,
   strokeColor,
   strokeWidth,
   clearTrigger,
@@ -22,115 +25,152 @@ export default function DrawingCanvas({
   isDrawingMode,
   isEraserMode,
   parentRef,
+  onChange,
+  disableDrawing = false,
+  onRequestExitDrawing,
 }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
-  const isDrawing = useRef(false);
+  const [isDrawing, setIsDrawing] = useState(false);
 
-  // 🔁 Resizing dinámico con scroll y tamaño visible
-  const resizeCanvasToMatchContainer = useCallback(() => {
-    const canvas = canvasRef.current;
-    const container = parentRef.current;
-    if (!canvas || !container) return;
+  // Ajustar tamaño del canvas al contenedor
+  const resizeToParent = () => {
+    if (!parentRef.current || !canvasRef.current) return;
+    const c = canvasRef.current;
+    const { scrollWidth, scrollHeight } = parentRef.current;
+    // conservar el contenido al redimensionar
+    const prev = c.toDataURL();
+    c.width = scrollWidth || 1200;
+    c.height = scrollHeight || 1200;
+    // reimprimir el dibujo previo si existe
+    if (prev) {
+      const img = new Image();
+      img.onload = () => c.getContext("2d")?.drawImage(img, 0, 0);
+      img.src = prev;
+    }
+  };
 
-    // Solo cubrimos el área visible (viewport interno)
-    const { clientWidth, clientHeight, scrollLeft, scrollTop } = container;
-
-    canvas.width = clientWidth;
-    canvas.height = clientHeight;
-
-    // Alineamos el canvas con el scroll actual del contenedor
-    canvas.style.top = `${container.offsetTop}px`;
-    canvas.style.left = `${container.offsetLeft}px`;
-
-    canvas.style.transform = `translate(${scrollLeft}px, ${scrollTop}px)`;
+  useEffect(() => {
+    resizeToParent();
+    const handler = () => resizeToParent();
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parentRef]);
 
+  // Limpiar canvas cuando se dispara clearTrigger
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = parentRef.current;
-    if (!canvas || !container) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.globalAlpha = 0.8;
-    ctxRef.current = ctx;
-
-    resizeCanvasToMatchContainer();
-
-    // Escuchar cambios de tamaño y scroll
-    window.addEventListener("resize", resizeCanvasToMatchContainer);
-    container.addEventListener("scroll", resizeCanvasToMatchContainer);
-
-    return () => {
-      window.removeEventListener("resize", resizeCanvasToMatchContainer);
-      container.removeEventListener("scroll", resizeCanvasToMatchContainer);
-    };
-  }, [resizeCanvasToMatchContainer]);
-
-  useEffect(() => {
-    if (clearTrigger && ctxRef.current && canvasRef.current) {
-      ctxRef.current.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      onClearDone();
+    if (!clearTrigger || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    if (ctx) {
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     }
-  }, [clearTrigger, onClearDone]);
+    onClearDone();
+    // Notificar nuevo estado
+    onChange?.(canvasRef.current.toDataURL());
+  }, [clearTrigger, onClearDone, onChange]);
 
-  const getCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+  // Pintar la imagen base64 remota en el canvas cuando cambie `drawing`
+  useEffect(() => {
+    if (!drawing || !canvasRef.current) return;
+    const c = canvasRef.current;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0);
     };
+    img.src = drawing;
+  }, [drawing]);
+
+  // Si se deshabilita el dibujo (por drag de tokens, etc.), pedir salir del modo
+  useEffect(() => {
+    if (disableDrawing && isDrawingMode) {
+      onRequestExitDrawing?.();
+    }
+  }, [disableDrawing, isDrawingMode, onRequestExitDrawing]);
+
+  // Helpers de puntero (mouse/touch)
+  const getPoint = (e: React.MouseEvent | React.TouchEvent) => {
+    const c = canvasRef.current;
+    if (!c) return { x: 0, y: 0 };
+    const rect = c.getBoundingClientRect();
+    let clientX = 0;
+    let clientY = 0;
+    if ("touches" in e && e.touches[0]) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if ("nativeEvent" in e && "offsetX" in (e.nativeEvent as any)) {
+      // mouse
+      const me = e as React.MouseEvent<HTMLCanvasElement>;
+      return { x: me.nativeEvent.offsetX, y: me.nativeEvent.offsetY };
+    } else {
+      // fallback
+      const me = e as any;
+      clientX = me.clientX ?? 0;
+      clientY = me.clientY ?? 0;
+    }
+    return { x: clientX - rect.left, y: clientY - rect.top };
   };
 
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawingMode || e.button !== 0 || !ctxRef.current) return;
-    isDrawing.current = true;
-    const { x, y } = getCoords(e);
-    ctxRef.current.beginPath();
-    ctxRef.current.moveTo(x, y);
-    e.preventDefault();
+  const start = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawingMode || disableDrawing || !canvasRef.current) return;
+    setIsDrawing(true);
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+    const { x, y } = getPoint(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawingMode || !isDrawing.current || !ctxRef.current) return;
-    const { x, y } = getCoords(e);
-    ctxRef.current.strokeStyle = strokeColor;
-    ctxRef.current.lineWidth = strokeWidth;
-    ctxRef.current.globalCompositeOperation = isEraserMode ? "destination-out" : "source-over";
-    ctxRef.current.lineTo(x, y);
-    ctxRef.current.stroke();
-    e.preventDefault();
+  const move = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawing || disableDrawing || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+    const { x, y } = getPoint(e);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = strokeWidth;
+    ctx.strokeStyle = isEraserMode ? "#000000" : strokeColor;
+    ctx.globalCompositeOperation = isEraserMode ? "destination-out" : "source-over";
+    ctx.lineTo(x, y);
+    ctx.stroke();
   };
 
-  const endDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawingMode || !ctxRef.current) return;
-    isDrawing.current = false;
-    ctxRef.current.closePath();
-    e.preventDefault();
+  const end = () => {
+    if (!canvasRef.current) return;
+    if (isDrawing) {
+      setIsDrawing(false);
+      const ctx = canvasRef.current.getContext("2d");
+      ctx?.beginPath();
+      // avisar a TablePage que hay nueva imagen
+      onChange?.(canvasRef.current.toDataURL());
+    }
+    // 🔑 Auto-off: al terminar el trazo apagamos el modo dibujo
+    if (isDrawingMode) {
+      onRequestExitDrawing?.();
+    }
   };
 
   return (
     <canvas
-      id={id}
       ref={canvasRef}
-      onMouseDown={startDrawing}
-      onMouseMove={draw}
-      onMouseUp={endDrawing}
-      onMouseLeave={endDrawing}
       style={{
         position: "absolute",
         top: 0,
         left: 0,
-        pointerEvents: isDrawingMode ? "auto" : "none",
-        cursor: isDrawingMode ? "crosshair" : "default",
-        zIndex: 20,
+        // Solo intercepta eventos si el modo está activo y no está bloqueado por drags
+        pointerEvents: isDrawingMode && !disableDrawing ? "auto" : "none",
+        // opcional: feedback visual
+        cursor: isDrawingMode && !disableDrawing ? (isEraserMode ? "cell" : "crosshair") : "default",
       }}
+      onMouseDown={start}
+      onMouseMove={move}
+      onMouseUp={end}
+      onMouseLeave={end}
+      onTouchStart={start}
+      onTouchMove={move}
+      onTouchEnd={end}
     />
   );
 }

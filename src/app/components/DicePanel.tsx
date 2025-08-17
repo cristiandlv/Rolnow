@@ -1,104 +1,72 @@
 "use client";
 
-import { DiceType } from "@/utils/types";
-import { Icon } from "@iconify/react";
-import { motion, Variants } from "framer-motion";
 import { useState } from "react";
+import { DiceType } from "@/utils/types";
+import { motion } from "framer-motion";
 
-interface Props {
-  onRoll: (roll: { type: DiceType; value: number }) => void;
-  onStartShake: () => void;
-  onStopShake: () => void;
+const DICE_SIDES: Record<DiceType, number> = {
+  d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20, d100: 100,
+};
+
+interface DicePanelProps {
+  onRollStart?: (type: DiceType) => void;
+  onRollFinish: (type: DiceType, value: number) => void;
 }
 
-const diceIcons: Record<DiceType, string> = {
-  d4: "game-icons:d4",
-  d6: "game-icons:dice-six-faces-six",
-  d8: "game-icons:dice-eight-faces-eight",
-  d10: "game-icons:d10",
-  d12: "game-icons:d12",
-  d20: "game-icons:dice-twenty-faces-twenty",
-  d100: "game-icons:dice-twenty-faces-twenty",
-};
+export default function DicePanel({ onRollStart, onRollFinish }: DicePanelProps) {
+  const [busy, setBusy] = useState(false);
+  const [shakeType, setShakeType] = useState<DiceType | null>(null);
 
-const diceColors: Record<DiceType, { text: string; border: string; ring: string }> = {
-  d4: { text: "text-purple-400", border: "border-purple-500", ring: "ring-purple-500" },
-  d6: { text: "text-blue-400", border: "border-blue-500", ring: "ring-blue-500" },
-  d8: { text: "text-green-400", border: "border-green-500", ring: "ring-green-500" },
-  d10: { text: "text-yellow-400", border: "border-yellow-500", ring: "ring-yellow-500" },
-  d12: { text: "text-pink-400", border: "border-pink-500", ring: "ring-pink-500" },
-  d20: { text: "text-emerald-400", border: "border-emerald-500", ring: "ring-emerald-500" },
-  d100: { text: "text-red-400", border: "border-red-500", ring: "ring-red-500" },
-};
+  const roll = (type: DiceType) => {
+    if (busy) return;
+    setBusy(true);
+    setShakeType(type);
 
-const shakeVariants: Variants = {
-  idle: { rotate: 0, x: 0, y: 0, transition: { duration: 0.3 } },
-  shaking: {
-    rotate: [0, 10, -10, 10, -10, 0],
-    x: [0, -3, 3, -3, 3, 0],
-    y: [0, -3, 3, -3, 3, 0],
-    transition: { repeat: Infinity, duration: 0.3, ease: "easeInOut" },
-  },
-};
+    onRollStart?.(type);
 
-export default function DicePanel({ onRoll, onStartShake, onStopShake }: Props) {
-  const diceList: DiceType[] = ["d4", "d6", "d8", "d10", "d12", "d20", "d100"];
-  const [shakingDice, setShakingDice] = useState<DiceType | null>(null);
-
-  const handleDiceClick = (type: DiceType) => {
-    const sides = parseInt(type.replace("d", ""), 10);
-    if (isNaN(sides)) return;
-
-    const result = Math.floor(Math.random() * sides) + 1;
-
-    setShakingDice(type);
-    onStartShake();
+    const SHAKE_MS = 1400; // más rápido
 
     setTimeout(() => {
-      setShakingDice(null);
-      onStopShake();
-      onRoll({ type, value: result });
-    }, 2000); // SHAKE_DURATION
+      const sides = DICE_SIDES[type];
+      const value = 1 + Math.floor(Math.random() * sides);
+
+      setShakeType(null);
+      onRollFinish(type, value);
+
+      setTimeout(() => setBusy(false), 600);
+    }, SHAKE_MS);
   };
 
   return (
-    <section className="max-w-md mx-auto mt-10 p-5 bg-gray-900 rounded-xl shadow-lg border border-gray-700">
-      <h2 className="text-2xl font-semibold text-emerald-400 mb-6 text-center select-none">
-        🎲 Tirar Dados
-      </h2>
-
-      <div className="grid grid-cols-3 gap-2 justify-center">
-        {diceList.map((dice) => {
-          const color = diceColors[dice];
-          const isShaking = shakingDice === dice;
+    <div className="mt-4">
+      <h4 className="text-lg font-semibold text-emerald-300 mb-2">Dados</h4>
+      <div className="flex flex-wrap gap-2">
+        {Object.keys(DICE_SIDES).map((k) => {
+          const type = k as DiceType;
+          const isShaking = shakeType === type;
 
           return (
             <motion.button
-              key={dice}
-              initial="idle" // 👈 NECESARIO
-              animate={isShaking ? "shaking" : "idle"}
-              variants={shakeVariants}
-              onClick={() => handleDiceClick(dice)}
-              className={`
-                flex flex-col items-center justify-center
-                rounded-lg border-2 bg-gray-800
-                ${color.text} ${color.border}
-                font-semibold text-lg uppercase
-                shadow-md cursor-pointer select-none
-                transition duration-300 ease-out
-                hover:bg-gray-700 hover:scale-110
-                active:scale-95 active:bg-gray-900
-                focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-offset-gray-900
-                ${color.ring}
-              `}
-              style={{ width: "72px", height: "72px" }}
+              key={type}
+              disabled={busy}
+              onClick={() => roll(type)}
+              animate={
+                isShaking
+                  ? { rotate: [0, -15, 15, -10, 10, -5, 5, 0], y: [0, -2, 2, -1, 1, 0] }
+                  : { rotate: 0, y: 0 }
+              }
+              transition={{ duration: 0.5, ease: "easeInOut" }}
+              className={`px-3 py-2 rounded-md border font-semibold text-gray-100 text-sm
+                ${busy
+                  ? "opacity-60 cursor-not-allowed border-gray-600"
+                  : "border-emerald-500 bg-gray-800 hover:bg-emerald-700"
+                }`}
             >
-              <Icon icon={diceIcons[dice]} width={32} height={32} className={`mb-1 ${color.text}`} />
-              {dice.toUpperCase()}
+              {type.toUpperCase()}
             </motion.button>
           );
         })}
       </div>
-    </section>
+    </div>
   );
 }
