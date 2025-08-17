@@ -31,7 +31,7 @@ export default function CreateRoomPage() {
         🎲 RolNow
       </h1>
       <p className="text-lg md:text-xl text-gray-300 max-w-xl mb-8">
-        Crea tu mesa de rol y juega sin más complicaciones. Comenzá ahora.
+        Crea tu sala de rol y juega sin más complicaciones. Comenzá ahora.
       </p>
       <button
         onClick={handleCreateRoom}
