@@ -24,12 +24,8 @@ export default function TokenPalette() {
 
   return (
     <div className="w-full flex flex-col overflow-hidden">
-      <br />
-      <h3 className="text-lg font-semibold text-emerald-300 mb-4 text-center">
-        🎭 Token Palette
-      </h3>
+      <h3 className="text-lg font-semibold text-emerald-300 mb-4 text-center">🎭 Token Palette</h3>
 
-      {/* Pestañas de categorías */}
       <div className="flex flex-wrap gap-2 justify-center mb-4 px-2">
         {(Object.keys(categoryIcons) as Category[]).map((cat) => (
           <button
@@ -47,7 +43,6 @@ export default function TokenPalette() {
         ))}
       </div>
 
-      {/* Tokens scrollables */}
       <div className="flex-1 overflow-y-auto max-h-[calc(100vh-360px)] px-2 pb-4">
         {filteredTokens.length === 0 ? (
           <p className="text-center text-gray-400">No tokens in this category</p>
@@ -61,13 +56,7 @@ export default function TokenPalette() {
                 className="draggable-token cursor-move transition-transform hover:scale-110 flex justify-center items-center p-2 rounded-lg bg-gray-900 shadow border border-gray-700"
                 title={tokenId}
               >
-                <Icon
-                  icon={icon}
-                  width={32}
-                  height={32}
-                  color={color}
-                  className="drop-shadow-[0_0_2px_black]"
-                />
+                <Icon icon={icon} width={32} height={32} color={color} className="drop-shadow-[0_0_2px_black]" />
               </div>
             ))}
           </div>

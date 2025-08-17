@@ -1,63 +1,29 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { Icon } from "@iconify/react";
 import { tokenData } from "../toolsrpg/TokenData";
-import { DiceType } from "@/utils/types";
-import { motion, AnimatePresence } from "framer-motion";
-
-export interface CellToken {
-  id: number;
-  tokenId: string;
-}
+import { CellToken } from "@/app/table/page";
 
 interface GridBoardProps {
   tokens: CellToken[];
-  setTokens: React.Dispatch<React.SetStateAction<CellToken[]>>;
-  rolledDice: { type: DiceType; value: number } | null;
+  setTokens: (tokens: CellToken[] | ((prev: CellToken[]) => CellToken[])) => void;
   onTokenPointerDown?: () => void;
-  onTokenDragStart?: () => void;
-  style?: React.CSSProperties; // ✅ Permitir pasar estilos desde afuera
+  onTokenDragEnd?: () => void;
+  style?: React.CSSProperties;
 }
-
-const NOTIF_DISPLAY_TIME = 3000;
-const SHAKE_DURATION = 1000;
 
 export default function GridBoard({
   tokens,
   setTokens,
-  rolledDice,
   onTokenPointerDown,
-  onTokenDragStart,
+  onTokenDragEnd,
   style,
 }: GridBoardProps) {
   const gridSize = 60;
   const [cellSize, setCellSize] = useState(60);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isCopying, setIsCopying] = useState(false);
-  const [showDiceNotif, setShowDiceNotif] = useState(false);
-
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if (rolledDice) {
-      setShowDiceNotif(false);
-
-      if (timerRef.current) clearTimeout(timerRef.current);
-
-      timerRef.current = setTimeout(() => {
-        setShowDiceNotif(true);
-
-        timerRef.current = setTimeout(() => {
-          setShowDiceNotif(false);
-        }, NOTIF_DISPLAY_TIME);
-      }, SHAKE_DURATION);
-    }
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [rolledDice]);
 
   const zoomIn = () => setCellSize((prev) => Math.min(prev + 10, 100));
   const zoomOut = () => setCellSize((prev) => Math.max(prev - 10, 30));
@@ -66,9 +32,8 @@ export default function GridBoard({
   return (
     <div
       className="flex flex-col items-center w-full h-full gap-3 relative select-none"
-      style={style} // ✅ Usamos el style externo
+      style={style}
     >
-      {/* Controles de zoom */}
       <div className="flex gap-2 mb-2">
         <button onClick={zoomOut} className="btn">➖</button>
         <button onClick={resetZoom} className="btn">🔄</button>
@@ -79,24 +44,6 @@ export default function GridBoard({
         id="grid-board-inner"
         className="flex-1 overflow-auto p-4 rounded-xl border-2 border-emerald-600 bg-gray-950 shadow-inner"
       >
-        {/* Toast del dado */}
-        <AnimatePresence>
-          {showDiceNotif && rolledDice && (
-            <motion.div
-              key="dice-notif"
-              initial={{ opacity: 0, y: 20, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.8 }}
-              transition={{ duration: 0.4 }}
-              className="fixed bottom-36 left-1/2 -translate-x-1/2 z-50 bg-black bg-opacity-80 px-6 py-3 rounded-xl border border-emerald-500 shadow-lg text-white text-lg font-bold tracking-wide pointer-events-none"
-            >
-              🎲 {rolledDice.type.toUpperCase()} →{" "}
-              <span className="text-emerald-400">{rolledDice.value}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Grid */}
         <div
           className="grid"
           style={{
@@ -147,6 +94,7 @@ export default function GridBoard({
                       }
                     } catch {}
                   }
+                  onTokenDragEnd?.();
                 }}
                 onDragLeave={() => {
                   setHoveredIndex(null);
@@ -162,24 +110,16 @@ export default function GridBoard({
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData("from-board", JSON.stringify(token));
-                      onTokenDragStart?.();
+                      onTokenPointerDown?.(); // DESACTIVA DIBUJO
                     }}
-                    onPointerDown={() => onTokenPointerDown?.()}
+                    onPointerDown={() => onTokenPointerDown?.()} // DESACTIVA DIBUJO
                     className="token-on-board absolute inset-0 flex items-center justify-center cursor-move select-none"
                   >
                     <Icon
                       icon={tokenInfo.icon}
                       color={tokenInfo.color}
-                      width={
-                        ["dungeon", "environment"].includes(tokenInfo.category)
-                          ? cellSize * 0.85
-                          : cellSize * 0.6
-                      }
-                      height={
-                        ["dungeon", "environment"].includes(tokenInfo.category)
-                          ? cellSize * 0.85
-                          : cellSize * 0.6
-                      }
+                      width={cellSize * 0.6}
+                      height={cellSize * 0.6}
                       aria-label={`Token ${token.tokenId}`}
                     />
                   </div>
@@ -190,7 +130,6 @@ export default function GridBoard({
         </div>
       </div>
 
-      {/* Botones de zoom */}
       <style jsx>{`
         .btn {
           background-color: #1f2937;
