@@ -1,5 +1,6 @@
 "use client";
 
+
 export const dynamic = "force-dynamic"; // ⬅️ Evita prerender y SSR
 
 import { useEffect, useRef, useState } from "react";
