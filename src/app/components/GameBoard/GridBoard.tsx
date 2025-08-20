@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState } from "react";
 import { Icon } from "@iconify/react";
 import { tokenData } from "../toolsrpg/TokenData";
@@ -25,35 +24,30 @@ export default function GridBoard({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isCopying, setIsCopying] = useState(false);
 
-  const zoomIn = () => setCellSize((prev) => Math.min(prev + 10, 100));
-  const zoomOut = () => setCellSize((prev) => Math.max(prev - 10, 30));
-  const resetZoom = () => setCellSize(60);
+  const handleTokenInteraction = (e: React.PointerEvent | React.DragEvent) => {
+    e.stopPropagation();
+    onTokenPointerDown?.();
+  };
 
   return (
-    <div
-      className="flex flex-col items-center w-full h-full gap-3 relative select-none"
-      style={style}
-    >
+    <div className="flex flex-col items-center w-full h-full gap-3 relative select-none" style={style}>
       <div className="flex gap-2 mb-2">
-        <button onClick={zoomOut} className="btn">➖</button>
-        <button onClick={resetZoom} className="btn">🔄</button>
-        <button onClick={zoomIn} className="btn">➕</button>
+        <button onClick={() => setCellSize(p => Math.max(p - 10, 30))} className="btn">➖</button>
+        <button onClick={() => setCellSize(60)} className="btn">🔄</button>
+        <button onClick={() => setCellSize(p => Math.min(p + 10, 100))} className="btn">➕</button>
       </div>
 
-      <div
-        id="grid-board-inner"
-        className="flex-1 overflow-auto p-4 rounded-xl border-2 border-emerald-600 bg-gray-950 shadow-inner"
-      >
-        <div
-          className="grid"
-          style={{
+      <div className="flex-1 overflow-auto p-4 rounded-xl border-2 border-emerald-600 bg-gray-950 shadow-inner">
+        <div 
+          className="grid" 
+          style={{ 
             gridTemplateColumns: `repeat(${gridSize}, ${cellSize}px)`,
             gridTemplateRows: `repeat(${gridSize}, ${cellSize}px)`,
             gap: "2px",
           }}
         >
           {Array.from({ length: gridSize * gridSize }).map((_, index) => {
-            const token = tokens.find((t) => t.id === index);
+            const token = tokens.find(t => t.id === index);
             const tokenInfo = token ? tokenData[token.tokenId] : null;
             const isHovered = index === hoveredIndex;
 
@@ -62,7 +56,7 @@ export default function GridBoard({
                 key={index}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  setTokens((prev) => prev.filter((t) => t.id !== index));
+                  setTokens(prev => prev.filter(t => t.id !== index));
                 }}
                 onDragOver={(e) => {
                   e.preventDefault();
@@ -72,26 +66,26 @@ export default function GridBoard({
                 onDrop={(e) => {
                   e.preventDefault();
                   setHoveredIndex(null);
-                  const ctrlPressed = e.ctrlKey || e.metaKey;
-                  const fromPaletteId = e.dataTransfer.getData("token-id");
-                  const fromBoardRaw = e.dataTransfer.getData("from-board");
+                  setIsCopying(false);
 
-                  if (fromPaletteId && tokenData[fromPaletteId]) {
-                    if (!tokens.find((t) => t.id === index)) {
-                      setTokens((prev) => [...prev, { id: index, tokenId: fromPaletteId }]);
+                  const fromPalette = e.dataTransfer.getData("token-id");
+                  const fromBoard = e.dataTransfer.getData("from-board");
+
+                  if (fromPalette && tokenData[fromPalette]) {
+                    if (!tokens.some(t => t.id === index)) {
+                      setTokens(prev => [...prev, { id: index, tokenId: fromPalette }]);
                     }
-                  } else if (fromBoardRaw) {
+                  } 
+                  else if (fromBoard) {
                     try {
-                      const movedToken: CellToken = JSON.parse(fromBoardRaw);
-                      if (!tokens.find((t) => t.id === index)) {
-                        if (ctrlPressed) {
-                          setTokens((prev) => [...prev, { id: index, tokenId: movedToken.tokenId }]);
-                        } else {
-                          setTokens((prev) =>
-                            prev.filter((t) => t.id !== movedToken.id).concat({ ...movedToken, id: index })
-                          );
+                      const movedToken: CellToken = JSON.parse(fromBoard);
+                      setTokens(prev => {
+                        const filtered = prev.filter(t => t.id !== movedToken.id);
+                        if (!prev.some(t => t.id === index)) {
+                          return [...filtered, { ...movedToken, id: index }];
                         }
-                      }
+                        return filtered;
+                      });
                     } catch {}
                   }
                   onTokenDragEnd?.();
@@ -100,9 +94,9 @@ export default function GridBoard({
                   setHoveredIndex(null);
                   setIsCopying(false);
                 }}
-                className={`bg-gray-800 border rounded-sm flex items-center justify-center transition-colors relative
-                  ${isHovered && isCopying ? "border-sky-400 border-2" : "border-gray-700"}
-                  hover:border-emerald-500`}
+                className={`bg-gray-800 border rounded-sm flex items-center justify-center transition-colors relative ${
+                  isHovered && isCopying ? "border-sky-400 border-2" : "border-gray-700"
+                } hover:border-emerald-500`}
                 style={{ width: cellSize, height: cellSize }}
               >
                 {token && tokenInfo && (
@@ -110,17 +104,16 @@ export default function GridBoard({
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData("from-board", JSON.stringify(token));
-                      onTokenPointerDown?.(); // DESACTIVA DIBUJO
+                      handleTokenInteraction(e);
                     }}
-                    onPointerDown={() => onTokenPointerDown?.()} // DESACTIVA DIBUJO
+                    onPointerDown={handleTokenInteraction}
                     className="token-on-board absolute inset-0 flex items-center justify-center cursor-move select-none"
                   >
-                    <Icon
-                      icon={tokenInfo.icon}
-                      color={tokenInfo.color}
-                      width={cellSize * 0.6}
-                      height={cellSize * 0.6}
-                      aria-label={`Token ${token.tokenId}`}
+                    <Icon 
+                      icon={tokenInfo.icon} 
+                      color={tokenInfo.color} 
+                      width={cellSize * 0.6} 
+                      height={cellSize * 0.6} 
                     />
                   </div>
                 )}
@@ -129,20 +122,6 @@ export default function GridBoard({
           })}
         </div>
       </div>
-
-      <style jsx>{`
-        .btn {
-          background-color: #1f2937;
-          padding: 6px 12px;
-          border-radius: 6px;
-          color: white;
-          font-weight: 500;
-          transition: background 0.3s;
-        }
-        .btn:hover {
-          background-color: #374151;
-        }
-      `}</style>
     </div>
   );
 }
