@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic"; // ⬅️ Evita prerender y SSR
+
 import { useEffect, useRef, useState } from "react";
 import {
   FaTools,
@@ -9,7 +11,7 @@ import {
   FaUser,
   FaRegCopy,
 } from "react-icons/fa";
-import { RiPencilLine, RiEraserLine, RiDeleteBinLine } from "react-icons/ri"; // ⬅️ Íconos minimalistas
+import { RiPencilLine, RiEraserLine, RiDeleteBinLine } from "react-icons/ri"; 
 import DicePanel from "../components/DicePanel";
 import GameBoard from "../components/GameBoard/GBoardComponent";
 import GridBoard from "../components/GameBoard/GridBoard";
@@ -31,7 +33,7 @@ import {
 } from "firebase/firestore";
 import { toast } from "react-toastify";
 import { CellToken } from "../table/page";
-import { useRouter } from "next/navigation"; // ⬅️ para redirigir
+import { useRouter } from "next/navigation";
 
 // ---------------------------
 // TYPES
@@ -45,7 +47,7 @@ type RollPayload = {
 };
 
 interface TablePageProps {
-  roomId?: string; // opcional, puede generar nuevo
+  roomId?: string;
 }
 
 // ---------------------------
@@ -138,7 +140,6 @@ function RoomLinkFloating({ roomId }: { roomId: string }) {
 // ---------------------------
 export default function TablePage({ roomId: propRoomId }: TablePageProps) {
   const [roomId, setRoomId] = useState<string | null>(propRoomId || null);
-
   const [toolsOpen, setToolsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
 
@@ -168,7 +169,7 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
 
   const [toastPending, setToastPending] = useState<RollPayload | null>(null);
 
-  const router = useRouter(); // ⬅️
+  const router = useRouter();
 
   useEffect(() => {
     toolsOpenRef.current = toolsOpen;
@@ -244,7 +245,6 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
     const generateRoomIfNeeded = async () => {
       if (roomId || propRoomId) return;
 
-      // ⬅️ Protección crypto
       if (typeof crypto === "undefined" || !crypto.randomUUID) {
         console.error("crypto.randomUUID no disponible");
         return;
@@ -302,7 +302,6 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
       const data = snap.data() as any;
       if (!data) return;
 
-      // Tokens
       if (Array.isArray(data.tokens)) {
         const incoming = data.tokens as CellToken[];
         if (JSON.stringify(incoming) !== JSON.stringify(tokensRef.current)) {
@@ -311,7 +310,6 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
         }
       }
 
-      // Dice
       if (data.rolledDice && data.rolledDice.nonce) {
         const incoming: RollPayload = data.rolledDice;
         if (incoming.nonce !== lastRollNonceRef.current) {
@@ -328,7 +326,6 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
         }
       }
 
-      // Drawing
       if (data.drawing !== undefined && data.drawing !== drawingRef.current) {
         drawingRef.current = data.drawing ?? null;
         setDrawing(drawingRef.current);
@@ -444,12 +441,8 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
   // ---------------------------
   // RENDER (guardias de validación primero)
   // ---------------------------
-  if (roomExists === null) {
-    return <div className="text-white">Cargando sala...</div>;
-  }
-  if (roomExists === false) {
-    return null;
-  }
+  if (roomExists === null) return <div className="text-white">Cargando sala...</div>;
+  if (roomExists === false) return null;
   if (!roomId) return <div>Cargando sala...</div>;
 
   return (
@@ -499,9 +492,8 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
         </div>
       )}
 
-      {/* Menú dibujo — íconos minimalistas */}
+      {/* Menú dibujo */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-gray-800/90 px-4 py-2 rounded-2xl shadow-xl border border-emerald-500">
-        {/* Lápiz */}
         <button
           onClick={() => {
             setIsDrawingMode(!isDrawingMode || isErasing);
@@ -518,7 +510,6 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
           <RiPencilLine className="w-5 h-5" />
         </button>
 
-        {/* Goma */}
         <button
           onClick={() => {
             setIsDrawingMode(!isDrawingMode || !isErasing);
@@ -535,7 +526,6 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
           <RiEraserLine className="w-5 h-5" />
         </button>
 
-        {/* Color */}
         <input
           type="color"
           value={strokeColor}
@@ -545,7 +535,6 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
           aria-label="Color del trazo"
         />
 
-        {/* Grosor */}
         <input
           type="range"
           min={1}
@@ -556,7 +545,6 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
           aria-label="Grosor del trazo"
         />
 
-        {/* Limpiar */}
         <button
           onClick={() => setClearTrigger(true)}
           className="p-3 rounded-full bg-red-500 hover:bg-red-400 transition-all text-white"
@@ -593,7 +581,7 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
         </button>
       )}
 
-      {/* Nombre actual y botón cambiar */}
+      {/* Nombre usuario */}
       <div className="fixed top-1 left-80 flex items-center gap-3 bg-gray-800 px-4 py-2 rounded-full shadow-lg z-50">
         <span
           className="font-semibold text-emerald-400 truncate max-w-[100px]"
