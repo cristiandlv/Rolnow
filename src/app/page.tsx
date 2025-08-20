@@ -1,32 +1,15 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/utils/firebaseConfig';
+import { useState } from "react";
+import CreateRoomModal from "./components/CreateRoomModal";
+import CleanupExpiredRooms from "./components/CleanupExpireRooms";
 
 export default function CreateRoomPage() {
-  const router = useRouter();
-  const [creating, setCreating] = useState(false);
-
-  const handleCreateRoom = async () => {
-    try {
-      setCreating(true);
-      const roomRef = await addDoc(collection(db, 'rooms'), {
-        createdAt: serverTimestamp(),
-        players: [],
-        state: {}, // podés guardar acá tokens, tablero, etc.
-      });
-      router.push(`/table/${roomRef.id}`);
-    } catch (error) {
-      console.error('Error al crear sala:', error);
-      alert('Error al crear la sala');
-      setCreating(false);
-    }
-  };
+  const [modalOpen, setModalOpen] = useState(false);
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center text-center p-6 bg-gradient-to-b from-gray-900 to-black text-white">
+       <CleanupExpiredRooms />
       <h1 className="text-4xl md:text-6xl font-bold mb-4 text-emerald-400">
         🎲 RolNow
       </h1>
@@ -34,12 +17,13 @@ export default function CreateRoomPage() {
         Crea tu sala de rol y juega sin más complicaciones. Comenzá ahora.
       </p>
       <button
-        onClick={handleCreateRoom}
+        onClick={() => setModalOpen(true)}
         className="bg-emerald-500 hover:bg-emerald-600 transition-colors text-white px-6 py-3 rounded-xl text-lg font-semibold shadow-lg cursor-pointer"
-        disabled={creating}
       >
-        {creating ? 'Creando...' : 'Empezar a jugar'}
+        Crear Sala
       </button>
+
+      {modalOpen && <CreateRoomModal onClose={() => setModalOpen(false)} />}
     </main>
   );
 }

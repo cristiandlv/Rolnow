@@ -5,18 +5,18 @@ import {
   FaTools,
   FaComments,
   FaTimes,
-  FaPen,
-  FaTrash,
-  FaEraser,
-  FaRegCopy,
   FaLink,
+  FaUser,
+  FaRegCopy,
 } from "react-icons/fa";
+import { RiPencilLine, RiEraserLine, RiDeleteBinLine } from "react-icons/ri"; // ⬅️ Íconos minimalistas
 import DicePanel from "../components/DicePanel";
 import GameBoard from "../components/GameBoard/GBoardComponent";
 import GridBoard from "../components/GameBoard/GridBoard";
 import TokenPalette from "../components/toolsrpg/TokenPalette";
 import ChatBox from "../components/ChatBox";
 import DrawingCanvas from "../components/GameBoard/DrawingCanvas";
+import UsernameModal from "../components/UserModal";
 import { DiceType } from "@/utils/types";
 import { db } from "@/utils/firebaseConfig";
 import {
@@ -25,13 +25,13 @@ import {
   setDoc,
   updateDoc,
   getDoc,
-  // 👉 añadidos:
   addDoc,
   collection,
   serverTimestamp,
 } from "firebase/firestore";
 import { toast } from "react-toastify";
 import { CellToken } from "../table/page";
+import { useRouter } from "next/navigation"; // ⬅️ para redirigir
 
 // ---------------------------
 // TYPES
@@ -41,11 +41,11 @@ type RollPayload = {
   value: number;
   nonce: string;
   at: number;
-  by?: string; // 👉 quién tiró
+  by?: string;
 };
 
 interface TablePageProps {
-  roomId: string;
+  roomId?: string; // opcional, puede generar nuevo
 }
 
 // ---------------------------
@@ -67,7 +67,7 @@ function RoomLinkFloating({ roomId }: { roomId: string }) {
       }
     };
     fetchRoom();
-  }, [roomId]);
+  }, [roomRef]);
 
   const saveRoomName = async () => {
     await updateDoc(roomRef, { name: roomName });
@@ -77,7 +77,10 @@ function RoomLinkFloating({ roomId }: { roomId: string }) {
   const copyLink = () => {
     const link = `${window.location.origin}/table/${roomId}`;
     navigator.clipboard.writeText(link);
-    toast.success("Link copiado al portapapeles!", { position: "top-center", autoClose: 2000 });
+    toast.success("Link copiado al portapapeles!", {
+      position: "top-center",
+      autoClose: 2000,
+    });
   };
 
   return (
@@ -131,7 +134,9 @@ function RoomLinkFloating({ roomId }: { roomId: string }) {
 // ---------------------------
 // MAIN TABLE PAGE
 // ---------------------------
-export default function TablePage({ roomId }: TablePageProps) {
+export default function TablePage({ roomId: propRoomId }: TablePageProps) {
+  const [roomId, setRoomId] = useState<string | null>(propRoomId || null);
+
   const [toolsOpen, setToolsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
 
@@ -149,6 +154,8 @@ export default function TablePage({ roomId }: TablePageProps) {
   const [isErasing, setIsErasing] = useState(false);
   const [disableDrawing, setDisableDrawing] = useState(false);
 
+  const [showUserModal, setShowUserModal] = useState(false);
+
   const gridWrapperRef = useRef<HTMLDivElement>(null);
   const roomRef = roomId ? doc(db, "rooms", roomId) : null;
 
@@ -159,80 +166,194 @@ export default function TablePage({ roomId }: TablePageProps) {
 
   const [toastPending, setToastPending] = useState<RollPayload | null>(null);
 
+  const router = useRouter(); // ⬅️
+
   useEffect(() => {
     toolsOpenRef.current = toolsOpen;
   }, [toolsOpen]);
 
-  // 👉 username desde localStorage (como usa tu ChatBox)
-  const username =
-    typeof window !== "undefined"
-      ? localStorage.getItem("rpg-username") || "Anon"
-      : "Anon";
+  // username
+  const [username, setUsername] = useState("Anon");
+  useEffect(() => {
+    const saved = localStorage.getItem("rpg-username");
+    if (saved) {
+      setUsername(saved);
+    } else {
+      setShowUserModal(true);
+    }
+  }, []);
+
+  const handleSaveName = (name: string) => {
+    setUsername(name);
+    localStorage.setItem("rpg-username", name);
+    setShowUserModal(false);
+  };
+
+  // ---------------------------
+  // VALIDAR ROOM SI LLEGA POR URL
+  // ---------------------------
+  const [roomExists, setRoomExists] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkRoom = async () => {
+      // Si NO viene roomId por props, esto es flujo de "crear nueva"
+      if (!propRoomId) {
+        setRoomExists(true);
+        return;
+      }
+
+      try {
+        const ref = doc(db, "rooms", propRoomId);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          setRoomExists(true);
+          // aseguramos state
+          setRoomId(propRoomId);
+        } else {
+          setRoomExists(false);
+          toast.error("La sala no existe o fue eliminada. Creá una nueva.", {
+            position: "top-center",
+            autoClose: 3000,
+            theme: "dark",
+          });
+          router.replace("/"); // ⬅️ Redirección al home
+        }
+      } catch (e) {
+        console.error("Error validando sala:", e);
+        setRoomExists(false);
+        toast.error("No se pudo validar la sala. Intenta desde la página principal.", {
+          position: "top-center",
+          autoClose: 3000,
+          theme: "dark",
+        });
+        router.replace("/");
+      }
+    };
+
+    checkRoom();
+  }, [propRoomId, router]);
+
+  // ---------------------------
+  // ROOM GENERATOR (si NO hay roomId en props)
+  // ---------------------------
+  useEffect(() => {
+    const generateRoomIfNeeded = async () => {
+      // Si ya hay roomId (prop o state) no generamos
+      if (roomId || propRoomId) return;
+
+      const newRoomId = crypto.randomUUID();
+      const secretKey = crypto.randomUUID();
+
+      try {
+        // Intentamos crear la sala
+        await setDoc(doc(db, "rooms", newRoomId), {
+          tokens: [],
+          rolledDice: null,
+          drawing: null,
+          createdAt: serverTimestamp(),
+          secretKey,
+        });
+
+        setRoomId(newRoomId);
+        setRoomExists(true);
+
+        toast.success("Sala creada con éxito!", {
+          position: "top-center",
+          autoClose: 2500,
+          pauseOnHover: true,
+          theme: "dark",
+          style: {
+            background: "#065f46",
+            color: "#fff",
+            fontWeight: "bold",
+          },
+        });
+      } catch (error: any) {
+        console.error("Error creando la sala:", error);
+
+        // Si el error es de permisos, mostrar mensaje claro
+        if (error.code === "permission-denied") {
+          toast.error(
+            "No tenés permisos para crear salas. Revisá las reglas de Firestore.",
+            {
+              position: "top-center",
+              autoClose: 4000,
+              pauseOnHover: true,
+              theme: "dark",
+              style: {
+                background: "#b91c1c",
+                color: "#fff",
+                fontWeight: "bold",
+              },
+            }
+          );
+        } else {
+          toast.error("No se pudo crear la sala. Intenta de nuevo.", {
+            position: "top-center",
+            autoClose: 3500,
+            pauseOnHover: true,
+            theme: "dark",
+            style: {
+              background: "#b91c1c",
+              color: "#fff",
+              fontWeight: "bold",
+            },
+          });
+        }
+      }
+    };
+
+    generateRoomIfNeeded();
+  }, [roomId, propRoomId]);
 
   // ---------------------------
   // FIRESTORE SYNC
   // ---------------------------
-  const ensureRoomDoc = async () => {
-    if (!roomRef) return;
-    const snap = await getDoc(roomRef);
-    if (!snap.exists()) {
-      await setDoc(roomRef, {
-        tokens: [],
-        rolledDice: null,
-        drawing: null,
-        updatedAt: Date.now(),
-      });
-    }
-  };
-
   useEffect(() => {
     if (!roomRef) return;
     let unsub: (() => void) | undefined;
 
-    (async () => {
-      await ensureRoomDoc();
-      unsub = onSnapshot(roomRef, (snap) => {
-        const data = snap.data() as any;
-        if (!data) return;
+    unsub = onSnapshot(roomRef, (snap) => {
+      const data = snap.data() as any;
+      if (!data) return;
 
-        // Tokens
-        if (Array.isArray(data.tokens)) {
-          const incoming = data.tokens as CellToken[];
-          if (JSON.stringify(incoming) !== JSON.stringify(tokensRef.current)) {
-            tokensRef.current = incoming;
-            _setTokens(incoming);
+      // Tokens
+      if (Array.isArray(data.tokens)) {
+        const incoming = data.tokens as CellToken[];
+        if (JSON.stringify(incoming) !== JSON.stringify(tokensRef.current)) {
+          tokensRef.current = incoming;
+          _setTokens(incoming);
+        }
+      }
+
+      // Dice
+      if (data.rolledDice && data.rolledDice.nonce) {
+        const incoming: RollPayload = data.rolledDice;
+        if (incoming.nonce !== lastRollNonceRef.current) {
+          lastRollNonceRef.current = incoming.nonce;
+          setRolledDice(incoming);
+          setIsShaking(true);
+          setShowGameBoard(true);
+
+          if (window.innerWidth <= 640 && toolsOpenRef.current) {
+            setToolsOpen(false);
           }
+
+          setToastPending(incoming);
         }
+      }
 
-        // Dice
-        if (data.rolledDice && data.rolledDice.nonce) {
-          const incoming: RollPayload = data.rolledDice;
-          if (incoming.nonce !== lastRollNonceRef.current) {
-            lastRollNonceRef.current = incoming.nonce;
-            setRolledDice(incoming);
-            setIsShaking(true);
-            setShowGameBoard(true);
-
-            if (window.innerWidth <= 640 && toolsOpenRef.current) {
-              setToolsOpen(false);
-            }
-
-            setToastPending(incoming);
-          }
-        }
-
-        // Drawing
-        if (data.drawing !== undefined && data.drawing !== drawingRef.current) {
-          drawingRef.current = data.drawing ?? null;
-          setDrawing(drawingRef.current);
-        }
-      });
-    })();
+      // Drawing
+      if (data.drawing !== undefined && data.drawing !== drawingRef.current) {
+        drawingRef.current = data.drawing ?? null;
+        setDrawing(drawingRef.current);
+      }
+    });
 
     return () => {
       if (unsub) unsub();
     };
-  }, [roomId]);
+  }, [roomId, roomRef]);
 
   // ---------------------------
   // TOKENS LOCAL SETTER
@@ -246,7 +367,8 @@ export default function TablePage({ roomId }: TablePageProps) {
         : next;
     tokensRef.current = resolved;
     _setTokens(resolved);
-    if (roomRef) updateDoc(roomRef, { tokens: resolved, updatedAt: Date.now() });
+    if (roomRef)
+      updateDoc(roomRef, { tokens: resolved, updatedAt: Date.now() });
   };
 
   // ---------------------------
@@ -262,7 +384,7 @@ export default function TablePage({ roomId }: TablePageProps) {
       value,
       nonce,
       at: Date.now(),
-      by: username, // 👉 guardo quién tiró
+      by: username,
     };
     await updateDoc(roomRef, { rolledDice: payload, updatedAt: Date.now() });
   };
@@ -296,7 +418,6 @@ export default function TablePage({ roomId }: TablePageProps) {
           autoClose: 2000,
         });
 
-        // 👉 Solo el que tiró manda el mensaje al chat
         if (toastPending.by === username) {
           const texto = `🎲 ${toastPending.by} ha tirado un ${String(
             toastPending.type
@@ -318,12 +439,14 @@ export default function TablePage({ roomId }: TablePageProps) {
   }, [toastPending, roomId, username]);
 
   // ---------------------------
-  // TOKEN EVENTS
+  // TOKEN EVENTS (UX mejorado)
   // ---------------------------
   const handleTokenPointerDown = () => {
     setDisableDrawing(true);
-    setIsDrawingMode(false);
-    setIsErasing(false);
+    if (isDrawingMode) {
+      setIsDrawingMode(false);
+      setIsErasing(false);
+    }
   };
 
   const handleTokenDragEnd = () => {
@@ -331,39 +454,58 @@ export default function TablePage({ roomId }: TablePageProps) {
   };
 
   // ---------------------------
-  // RENDER
+  // RENDER (guardias de validación primero)
   // ---------------------------
+  if (roomExists === null) {
+    return <div className="text-white">Cargando sala...</div>;
+  }
+  if (roomExists === false) {
+    // Evitamos render mientras redirige
+    return null;
+  }
+  if (!roomId) return <div>Cargando sala...</div>;
+
   return (
     <main className="relative w-screen h-screen bg-gray-900 text-white select-none">
-      {/* Room Link Flotante */}
       <RoomLinkFloating roomId={roomId} />
 
-      {/* Tablero */}
       <div ref={gridWrapperRef} className="absolute inset-0 overflow-auto relative">
         <GridBoard
           tokens={tokens}
           setTokens={setTokensLocal}
           onTokenPointerDown={handleTokenPointerDown}
           onTokenDragEnd={handleTokenDragEnd}
-          disableDrawing={disableDrawing}
           style={{ minWidth: 1200, minHeight: 1200 }}
         />
 
         <DrawingCanvas
-          drawing={drawing}
-          strokeColor={strokeColor}
-          strokeWidth={strokeWidth}
-          clearTrigger={clearTrigger}
-          onClearDone={() => setClearTrigger(false)}
-          isDrawingMode={isDrawingMode}
-          isEraserMode={isErasing}
-          parentRef={gridWrapperRef}
-          onChange={handleDrawingChange}
-          disableDrawing={disableDrawing}
-        />
+  roomId={roomId} // ⬅️ obligatorio para Firestore
+  drawing={drawing}
+  strokeColor={strokeColor}
+  strokeWidth={strokeWidth}
+  clearTrigger={clearTrigger}
+  onClearDone={() => setClearTrigger(false)}
+  isDrawingMode={isDrawingMode}
+  isEraserMode={isErasing}
+  parentRef={gridWrapperRef}
+  disableDrawing={disableDrawing}
+  onRequestExitDrawing={() => {
+    setIsDrawingMode(false);
+    setIsErasing(false);
+  }}
+/>
+
+        {/* Indicador de modo activo (sin emojis) */}
+        {isDrawingMode && (
+  <div className="pointer-events-none fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-sm font-semibold bg-emerald-600 text-white shadow-xl z-40 animate-pulse">
+    {isErasing ? "Modo Borrador" : "Modo Dibujo"}  
+  </div>
+)}
+
       </div>
 
-      {/* Resultado dados */}
+
+
       {showGameBoard && rolledDice && (
         <div className="fixed top-24 sm:top-32 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-gray-800 rounded-xl shadow-lg transition-all duration-500 ease-out">
           <GameBoard
@@ -374,53 +516,71 @@ export default function TablePage({ roomId }: TablePageProps) {
         </div>
       )}
 
-      {/* Menú dibujo */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-wrap justify-center gap-2 sm:gap-3">
+      {/* Menú dibujo — íconos minimalistas */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-gray-800/90 px-4 py-2 rounded-2xl shadow-xl border border-emerald-500">
+        {/* Lápiz */}
         <button
           onClick={() => {
-            setIsDrawingMode(true);
+            setIsDrawingMode(!isDrawingMode || isErasing);
             setIsErasing(false);
           }}
-          className={`p-3 rounded-full ${
-            isDrawingMode && !isErasing ? "bg-emerald-600" : "bg-gray-700"
+          className={`p-3 rounded-full transition-all ${
+            isDrawingMode && !isErasing
+              ? "bg-emerald-500 text-black shadow-lg scale-110"
+              : "bg-gray-700 hover:bg-gray-600 text-white"
           }`}
           title="Dibujar"
+          aria-label="Dibujar"
         >
-          <FaPen />
+          <RiPencilLine className="w-5 h-5" />
         </button>
+
+        {/* Goma */}
         <button
           onClick={() => {
-            setIsDrawingMode(true);
+            setIsDrawingMode(!isDrawingMode || !isErasing);
             setIsErasing(true);
           }}
-          className={`p-3 rounded-full ${
-            isErasing ? "bg-yellow-500 text-gray-900" : "bg-gray-700"
+          className={`p-3 rounded-full transition-all ${
+            isDrawingMode && isErasing
+              ? "bg-yellow-400 text-black shadow-lg scale-110"
+              : "bg-gray-700 hover:bg-gray-600 text-white"
           }`}
           title="Borrar"
+          aria-label="Borrar"
         >
-          <FaEraser />
+          <RiEraserLine className="w-5 h-5" />
         </button>
+
+        {/* Color */}
         <input
           type="color"
           value={strokeColor}
           onChange={(e) => setStrokeColor(e.target.value)}
           disabled={isErasing}
-          title="Color"
+          className="w-10 h-10 rounded cursor-pointer border border-gray-600"
+          aria-label="Color del trazo"
         />
+
+        {/* Grosor */}
         <input
           type="range"
           min={1}
           max={20}
           value={strokeWidth}
           onChange={(e) => setStrokeWidth(Number(e.target.value))}
-          title="Grosor"
+          className="accent-emerald-500"
+          aria-label="Grosor del trazo"
         />
+
+        {/* Limpiar */}
         <button
           onClick={() => setClearTrigger(true)}
-          className="p-3 bg-red-500 rounded-full"
-          title="Limpiar"
+          className="p-3 rounded-full bg-red-500 hover:bg-red-400 transition-all text-white"
+          title="Limpiar todo"
+          aria-label="Limpiar todo"
         >
-          <FaTrash />
+          <RiDeleteBinLine className="w-5 h-5" />
         </button>
       </div>
 
@@ -450,16 +610,45 @@ export default function TablePage({ roomId }: TablePageProps) {
         </button>
       )}
 
+      {/* Nombre actual y botón cambiar */}
+      <div className="fixed top-1 left-80 flex items-center gap-3 bg-gray-800 px-4 py-2 rounded-full shadow-lg z-50">
+        <span
+          className="font-semibold text-emerald-400 truncate max-w-[100px]"
+          title={username}
+        >
+          {username}
+        </span>
+        <button
+          onClick={() => setShowUserModal(true)}
+          className="p-2 bg-gray-700 rounded-full hover:bg-emerald-600 transition-colors"
+          title="Cambiar nombre de usuario"
+        >
+          <FaUser />
+        </button>
+      </div>
+
       {/* Chat */}
       <div className="fixed top-6 right-6 z-50">
         {!chatOpen ? (
-          <button onClick={() => setChatOpen(true)} className="p-3 bg-gray-800 rounded-full">
+          <button
+            onClick={() => setChatOpen(true)}
+            className="p-3 bg-gray-800 rounded-full"
+          >
             <FaComments />
           </button>
         ) : (
           <ChatBox roomId={roomId} onClose={() => setChatOpen(false)} />
         )}
       </div>
+
+      {/* Modal usuario */}
+      {showUserModal && (
+        <UsernameModal
+          initialName={username}
+          onSave={handleSaveName}
+          onClose={() => setShowUserModal(false)}
+        />
+      )}
     </main>
   );
 }
