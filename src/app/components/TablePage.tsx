@@ -75,12 +75,14 @@ function RoomLinkFloating({ roomId }: { roomId: string }) {
   };
 
   const copyLink = () => {
-    const link = `${window.location.origin}/table/${roomId}`;
-    navigator.clipboard.writeText(link);
-    toast.success("Link copiado al portapapeles!", {
-      position: "top-center",
-      autoClose: 2000,
-    });
+    if (typeof window !== "undefined" && navigator.clipboard) {
+      const link = `${window.location.origin}/table/${roomId}`;
+      navigator.clipboard.writeText(link);
+      toast.success("Link copiado al portapapeles!", {
+        position: "top-center",
+        autoClose: 2000,
+      });
+    }
   };
 
   return (
@@ -175,17 +177,21 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
   // username
   const [username, setUsername] = useState("Anon");
   useEffect(() => {
-    const saved = localStorage.getItem("rpg-username");
-    if (saved) {
-      setUsername(saved);
-    } else {
-      setShowUserModal(true);
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("rpg-username");
+      if (saved) {
+        setUsername(saved);
+      } else {
+        setShowUserModal(true);
+      }
     }
   }, []);
 
   const handleSaveName = (name: string) => {
     setUsername(name);
-    localStorage.setItem("rpg-username", name);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("rpg-username", name);
+    }
     setShowUserModal(false);
   };
 
@@ -196,7 +202,6 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
 
   useEffect(() => {
     const checkRoom = async () => {
-      // Si NO viene roomId por props, esto es flujo de "crear nueva"
       if (!propRoomId) {
         setRoomExists(true);
         return;
@@ -207,7 +212,6 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
         const snap = await getDoc(ref);
         if (snap.exists()) {
           setRoomExists(true);
-          // aseguramos state
           setRoomId(propRoomId);
         } else {
           setRoomExists(false);
@@ -216,7 +220,7 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
             autoClose: 3000,
             theme: "dark",
           });
-          router.replace("/"); // ⬅️ Redirección al home
+          router.replace("/");
         }
       } catch (e) {
         console.error("Error validando sala:", e);
@@ -238,14 +242,18 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
   // ---------------------------
   useEffect(() => {
     const generateRoomIfNeeded = async () => {
-      // Si ya hay roomId (prop o state) no generamos
       if (roomId || propRoomId) return;
+
+      // ⬅️ Protección crypto
+      if (typeof crypto === "undefined" || !crypto.randomUUID) {
+        console.error("crypto.randomUUID no disponible");
+        return;
+      }
 
       const newRoomId = crypto.randomUUID();
       const secretKey = crypto.randomUUID();
 
       try {
-        // Intentamos crear la sala
         await setDoc(doc(db, "rooms", newRoomId), {
           tokens: [],
           rolledDice: null,
@@ -262,44 +270,21 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
           autoClose: 2500,
           pauseOnHover: true,
           theme: "dark",
-          style: {
-            background: "#065f46",
-            color: "#fff",
-            fontWeight: "bold",
-          },
+          style: { background: "#065f46", color: "#fff", fontWeight: "bold" },
         });
       } catch (error: any) {
         console.error("Error creando la sala:", error);
-
-        // Si el error es de permisos, mostrar mensaje claro
-        if (error.code === "permission-denied") {
-          toast.error(
-            "No tenés permisos para crear salas. Revisá las reglas de Firestore.",
-            {
-              position: "top-center",
-              autoClose: 4000,
-              pauseOnHover: true,
-              theme: "dark",
-              style: {
-                background: "#b91c1c",
-                color: "#fff",
-                fontWeight: "bold",
-              },
-            }
-          );
-        } else {
-          toast.error("No se pudo crear la sala. Intenta de nuevo.", {
-            position: "top-center",
-            autoClose: 3500,
-            pauseOnHover: true,
-            theme: "dark",
-            style: {
-              background: "#b91c1c",
-              color: "#fff",
-              fontWeight: "bold",
-            },
-          });
-        }
+        const msg =
+          error.code === "permission-denied"
+            ? "No tenés permisos para crear salas. Revisá las reglas de Firestore."
+            : "No se pudo crear la sala. Intenta de nuevo.";
+        toast.error(msg, {
+          position: "top-center",
+          autoClose: 3500,
+          pauseOnHover: true,
+          theme: "dark",
+          style: { background: "#b91c1c", color: "#fff", fontWeight: "bold" },
+        });
       }
     };
 
@@ -335,7 +320,7 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
           setIsShaking(true);
           setShowGameBoard(true);
 
-          if (window.innerWidth <= 640 && toolsOpenRef.current) {
+          if (typeof window !== "undefined" && window.innerWidth <= 640 && toolsOpenRef.current) {
             setToolsOpen(false);
           }
 
@@ -378,6 +363,9 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
     setIsShaking(true);
     setShowGameBoard(true);
     if (!roomRef) return;
+
+    if (typeof crypto === "undefined" || !crypto.randomUUID) return;
+
     const nonce = crypto.randomUUID();
     const payload: RollPayload = {
       type,
@@ -460,7 +448,6 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
     return <div className="text-white">Cargando sala...</div>;
   }
   if (roomExists === false) {
-    // Evitamos render mientras redirige
     return null;
   }
   if (!roomId) return <div>Cargando sala...</div>;
@@ -479,32 +466,28 @@ export default function TablePage({ roomId: propRoomId }: TablePageProps) {
         />
 
         <DrawingCanvas
-  roomId={roomId} // ⬅️ obligatorio para Firestore
-  drawing={drawing}
-  strokeColor={strokeColor}
-  strokeWidth={strokeWidth}
-  clearTrigger={clearTrigger}
-  onClearDone={() => setClearTrigger(false)}
-  isDrawingMode={isDrawingMode}
-  isEraserMode={isErasing}
-  parentRef={gridWrapperRef}
-  disableDrawing={disableDrawing}
-  onRequestExitDrawing={() => {
-    setIsDrawingMode(false);
-    setIsErasing(false);
-  }}
-/>
+          roomId={roomId}
+          drawing={drawing}
+          strokeColor={strokeColor}
+          strokeWidth={strokeWidth}
+          clearTrigger={clearTrigger}
+          onClearDone={() => setClearTrigger(false)}
+          isDrawingMode={isDrawingMode}
+          isEraserMode={isErasing}
+          parentRef={gridWrapperRef}
+          disableDrawing={disableDrawing}
+          onRequestExitDrawing={() => {
+            setIsDrawingMode(false);
+            setIsErasing(false);
+          }}
+        />
 
-        {/* Indicador de modo activo (sin emojis) */}
         {isDrawingMode && (
-  <div className="pointer-events-none fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-sm font-semibold bg-emerald-600 text-white shadow-xl z-40 animate-pulse">
-    {isErasing ? "Modo Borrador" : "Modo Dibujo"}  
-  </div>
-)}
-
+          <div className="pointer-events-none fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-sm font-semibold bg-emerald-600 text-white shadow-xl z-40 animate-pulse">
+            {isErasing ? "Modo Borrador" : "Modo Dibujo"}  
+          </div>
+        )}
       </div>
-
-
 
       {showGameBoard && rolledDice && (
         <div className="fixed top-24 sm:top-32 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-gray-800 rounded-xl shadow-lg transition-all duration-500 ease-out">
